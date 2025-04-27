@@ -1,0 +1,17 @@
+City,Left Lat,Left Lon,Right Lat,Right Lon,Lat Lon String,Status
+Urmia,37,45,38,46,"45E,37N,46E,38N",Downloaded
+Zanjan,36,48,37,49,"48E,36N,49E,37N",Downloaded
+Kermanshah,34,47,35,48,"47E,34N,48E,35N",Downloaded
+Ahwaz,31,48,32,49,"48E,31N,49E,32N",Downloaded
+Bushehr,28,51,29,52,"51E,28N,52E,29N",Downloaded
+Sari,36,53,37,54,"53E,36N,54E,37N",Downloaded
+Tehran,35,51,36,52,"51E,35N,52E,36N",Downloaded
+Semnan,35,53,36,54,"53E,35N,54E,36N",Downloaded
+Isfahan,32,51,33,52,"51E,32N,52E,33N",Downloaded
+Shiraz,29,52,30,53,"52E,29N,53E,30N",Downloaded
+Bandar Abbas,27,56,28,57,"56E,27N,57E,28N",Downloaded
+Mashhad,36,59,37,60,"59E,36N,60E,37N",Downloaded
+Birjand,32,59,33,60,"59E,32N,60E,33N",Downloaded
+Yazd,31,54,32,55,"54E,31N,55E,32N",Downloaded
+Kerman,30,57,31,58,"57E,30N,58E,31N",Downloaded
+Zahedan,29,60,30,61,"60E,29N,61E,30N",Downloaded

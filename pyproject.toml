@@ -1,0 +1,11 @@
+[project]
+name = "inst156"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "basemap>=1.4.1",
+    "basemap-data-hires>=1.3.2",
+    "seaborn>=0.13.2",
+]
