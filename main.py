@@ -9,6 +9,9 @@ import numpy as np
 import os
 
 DATA_DIR = 'data'
+CITY_ORDER = [
+    "Urmia", "Zanjan", "Kermanshah", "Ahwaz", "Bushehr", "Sari", "Tehran", "Semnan", "Isfahan", "Shiraz", "Bandar Abbas", "Mashhad", "Birjand", "Yazd", "Kerman", "Zahedan"
+]
 
 def load_data(locations):
     locations['fname_loc_string'] = locations['Lat Lon String'].apply(lambda x: x.replace(",", "_"))
@@ -74,6 +77,8 @@ def main():
 
     # Merge dust and AOD data by time and city
     merged_data = pd.merge(dust_data, aod_data, on=['time', 'city', 'source'])
+    # Replace -9999 with NaN for AOD
+    merged_data['aod'] = merged_data['aod'].replace(-9999, np.nan)
     #print(merged_data.head())
     #print(merged_data.columns)
 
@@ -131,6 +136,57 @@ def main():
     figs.tight_layout()
     # Save
     plt.savefig('dust_aod_time_series.png', dpi=300)
+
+    # Monthly averages from 2000-2015
+    subset = merged_data[(merged_data['time'] >= '2000-01-01') & (merged_data['time'] <= '2015-12-31')]
+    subset['month'] = subset['time'].dt.month
+    monthly_avg = subset.groupby(['month', 'city']).mean(numeric_only=True).reset_index()
+    # Make a 4x4 grid of subplots for AOD monthly means
+    fig, axs = plt.subplots(nrows=4, ncols=4, figsize=(12, 8), dpi=300)
+    # Plot each city in a subplot
+    for i, city in enumerate(CITY_ORDER):
+        ax = axs[i // 4, i % 4]
+        data_sub = monthly_avg[monthly_avg['city'] == city]
+        sns.lineplot(data=data_sub, x='month', y='aod', ax=ax, color='black',
+                     marker="o", markersize=5, linewidth=0.5)
+        ax.set_title(city)
+        if i % 4 == 0:
+            ax.set_ylabel('AOD')
+        else:
+            ax.set_ylabel('')
+        if i // 4 == 3:
+            ax.set_xlabel('Month')
+        else:
+            ax.set_xlabel('')
+        # Set x-ticks to be the month names
+        ax.set_xticks(range(1, 13))
+        ax.set_xticklabels(['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
+    fig.tight_layout()
+    # Save
+    plt.savefig('monthly_aod_means.png', dpi=300)
+
+    # Select the 3 cities
+    monthly_avg = monthly_avg[monthly_avg['city'].isin(['Ahwaz', 'Bushehr', 'Bandar Abbas'])]
+
+    # Seasonal AOD averages
+    subset = merged_data[(merged_data['time'] >= '2000-01-01') & (merged_data['time'] <= '2015-12-31')]
+    subset['month'] = subset['time'].dt.month
+    subset['season'] = subset['month'].apply(lambda x: 'Winter' if x in [12, 1, 2] else 
+                                              ('Spring' if x in [3, 4, 5] else
+                                               ('Summer' if x in [6, 7, 8] else 'Fall')))
+    seasonal_avg = subset.groupby(['season', 'city']).mean(numeric_only=True).reset_index()
+    # Make bar plot
+    fig, ax = plt.subplots(figsize=(8, 6), dpi=300)
+    sns.barplot(data=seasonal_avg, x='city', y='aod', hue='season', ax=ax)
+    ax.set_ylabel('AOD')
+    ax.set_xlabel('City')
+    ax.set_title('Seasonal AOD averages')
+    # Order x-axis by city order, reduce font size
+    ax.set_xticks(range(len(CITY_ORDER)))
+    ax.set_xticklabels(CITY_ORDER, rotation=45, fontsize=8)
+    ax.legend(title='Season')
+    # Save
+    plt.savefig('seasonal_aod_averages.png', dpi=300)
     
 if __name__ == "__main__":
     main()
