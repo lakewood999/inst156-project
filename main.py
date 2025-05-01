@@ -9,6 +9,7 @@ import numpy as np
 import os
 
 DATA_DIR = 'data'
+PLOT_DIR = 'plots'
 CITY_ORDER = [
     "Urmia", "Zanjan", "Kermanshah", "Ahwaz", "Bushehr", "Sari", "Tehran", "Semnan", "Isfahan", "Shiraz", "Bandar Abbas", "Mashhad", "Birjand", "Yazd", "Kerman", "Zahedan"
 ]
@@ -42,52 +43,7 @@ def load_data(locations):
 
     return dust_data, aod_data
 
-def main():
-    # Locations
-    locations = pd.read_csv(os.path.join(DATA_DIR, 'Locations.csv'))
-    #print(locations.head())
-
-    # Iran bounding box coordinates
-    ll_lon, ur_lon, ll_lat, ur_lat = 42, 65, 20, 41
-    m = Basemap(projection='merc', lon_0=0, resolution='l',
-                llcrnrlon = ll_lon, urcrnrlon = ur_lon,
-                llcrnrlat = ll_lat, urcrnrlat = ur_lat,
-                epsg=3857 # Mercator
-               )
-    m.shadedrelief()
-    #m.arcgisimage(service='ESRI_Imagery_World_2D', xpixels = 1500, verbose= True)
-    m.drawcountries(color='#ffffff', linewidth=0.5)
-    m.fillcontinents(color='#c0c0c0', lake_color='#ffffff')
-
-    # Run through each row and plot box
-    for index, row in locations.iterrows():
-        x1, y1 = m(row['Left Lon'], row['Left Lat'])
-        x2, y2 = m(row['Right Lon'], row['Left Lat'])
-        x3, y3 = m(row['Right Lon'], row['Right Lat'])
-        x4, y4 = m(row['Left Lon'], row['Right Lat'])
-        poly = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)],
-                       edgecolor='green', linewidth=1, facecolor='none')
-        plt.gca().add_patch(poly)
-
-    # Save the map to a file
-    plt.savefig('areas_of_interest.png', dpi=300, bbox_inches='tight')
-
-    # Load and process data
-    dust_data, aod_data = load_data(locations)
-
-    # Merge dust and AOD data by time and city
-    merged_data = pd.merge(dust_data, aod_data, on=['time', 'city', 'source'])
-    # Replace -9999 with NaN for AOD
-    merged_data['aod'] = merged_data['aod'].replace(-9999, np.nan)
-    #print(merged_data.head())
-    #print(merged_data.columns)
-
-    # Replicate figure one
-    # Select cities: Ahwaz, Bushehr, and Bandar Abbas
-    subset = merged_data[merged_data['city'].isin(['Ahwaz', 'Bushehr', 'Bandar Abbas'])]
-    # Select months between March 2000 and December 2015
-    subset = subset[(subset['time'] >= '2000-03-01') & (subset['time'] <= '2015-12-31')]
-    print(subset.head())
+def gen_dust_aod_time_series(subset, f_id=""):
     figs, axs = plt.subplots(ncols=2, nrows=3, figsize=(12, 8), dpi=300)
     cities = ['Ahwaz', 'Bushehr', 'Bandar Abbas']
     #aod_lims = [(0, 1.2), (0, 0.7), (0, 0.5)]
@@ -135,10 +91,9 @@ def main():
         axs[i, 1].set_ylabel('')
     figs.tight_layout()
     # Save
-    plt.savefig('dust_aod_time_series.png', dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR,f'dust_aod_time_series{f_id}.png'), dpi=300)
 
-    # Monthly averages from 2000-2015
-    subset = merged_data[(merged_data['time'] >= '2000-01-01') & (merged_data['time'] <= '2015-12-31')]
+def gen_monthly_aod_means(subset, f_id=""):
     subset['month'] = subset['time'].dt.month
     monthly_avg = subset.groupby(['month', 'city']).mean(numeric_only=True).reset_index()
     # Make a 4x4 grid of subplots for AOD monthly means
@@ -163,13 +118,9 @@ def main():
         ax.set_xticklabels(['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])
     fig.tight_layout()
     # Save
-    plt.savefig('monthly_aod_means.png', dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR,f'monthly_aod_means{f_id}.png'), dpi=300)
 
-    # Select the 3 cities
-    monthly_avg = monthly_avg[monthly_avg['city'].isin(['Ahwaz', 'Bushehr', 'Bandar Abbas'])]
-
-    # Seasonal AOD averages
-    subset = merged_data[(merged_data['time'] >= '2000-01-01') & (merged_data['time'] <= '2015-12-31')]
+def gen_seasonal_aod_means(subset, f_id=""):
     subset['month'] = subset['time'].dt.month
     subset['season'] = subset['month'].apply(lambda x: 'Winter' if x in [12, 1, 2] else 
                                               ('Spring' if x in [3, 4, 5] else
@@ -186,7 +137,115 @@ def main():
     ax.set_xticklabels(CITY_ORDER, rotation=45, fontsize=8)
     ax.legend(title='Season')
     # Save
-    plt.savefig('seasonal_aod_averages.png', dpi=300)
+    plt.savefig(os.path.join(PLOT_DIR,f'seasonal_aod_averages{f_id}.png'), dpi=300)
+
+def gen_anomaly_plots(subset, f_id=""):
+    # Compute yearly averages for each city
+    subset['year'] = subset['time'].dt.year
+    yearly_avg = subset.groupby(['year', 'city']).mean(numeric_only=True).reset_index()
+    # Compute anomaly per year per city by subtracting the average
+    yearly_avg['anomaly'] = yearly_avg.apply(lambda x: x['aod'] - yearly_avg[yearly_avg['city'] == x['city']]['aod'].mean(), axis=1)
+    fig, axs = plt.subplots(nrows=4, ncols=4, figsize=(12, 8), dpi=300)
+    # Plot each city in a subplot
+    for i, city in enumerate(CITY_ORDER):
+        ax = axs[i // 4, i % 4]
+        data_sub = yearly_avg[yearly_avg['city'] == city]
+        sns.lineplot(data=data_sub, x='year', y='anomaly', ax=ax, color='black',
+                     marker="o", markersize=5, linewidth=0.5)
+        # Draw a line at y = 0
+        ax.axhline(0, color='black', linestyle='--', linewidth=0.5)
+        # Add trendline
+        sns.regplot(data=data_sub, x='year', y='anomaly', ax=ax,
+                    scatter=False, color='black', line_kws={'color': 'red', 'linewidth':0.5}, ci=None)
+        ax.set_title(city)
+        if city in ("Ahwaz", "Bushehr"):
+            ax.set_ylim(-0.2, 0.2)
+        else:
+            ax.set_ylim(-0.1, 0.1)
+        if i % 4 == 0:
+            ax.set_ylabel('AOD anomaly')
+        else:
+            ax.set_ylabel('')
+        if i // 4 == 3:
+            ax.set_xlabel('Year')
+        else:
+            ax.set_xlabel('')
+    fig.tight_layout()
+    # Save
+    plt.savefig(os.path.join(PLOT_DIR,f'yearly_aod_anomalies{f_id}.png'), dpi=300)
+
+def main():
+    # Locations
+    locations = pd.read_csv(os.path.join(DATA_DIR, 'Locations.csv'))
+    #print(locations.head())
+
+    # Iran bounding box coordinates
+    ll_lon, ur_lon, ll_lat, ur_lat = 42, 65, 20, 41
+    m = Basemap(projection='merc', lon_0=0, resolution='l',
+                llcrnrlon = ll_lon, urcrnrlon = ur_lon,
+                llcrnrlat = ll_lat, urcrnrlat = ur_lat,
+                epsg=3857 # Mercator
+               )
+    m.shadedrelief()
+    #m.arcgisimage(service='ESRI_Imagery_World_2D', xpixels = 1500, verbose= True)
+    m.drawcountries(color='#ffffff', linewidth=0.5)
+    m.fillcontinents(color='#c0c0c0', lake_color='#ffffff')
+
+    # Run through each row and plot box
+    for index, row in locations.iterrows():
+        x1, y1 = m(row['Left Lon'], row['Left Lat'])
+        x2, y2 = m(row['Right Lon'], row['Left Lat'])
+        x3, y3 = m(row['Right Lon'], row['Right Lat'])
+        x4, y4 = m(row['Left Lon'], row['Right Lat'])
+        poly = Polygon([(x1, y1), (x2, y2), (x3, y3), (x4, y4)],
+                       edgecolor='green', linewidth=1, facecolor='none')
+        plt.gca().add_patch(poly)
+
+    # Save the map to a file
+    plt.savefig(os.path.join(PLOT_DIR, 'areas_of_interest.png'), dpi=300, bbox_inches='tight')
+
+    # Load and process data
+    dust_data, aod_data = load_data(locations)
+
+    # Merge dust and AOD data by time and city
+    merged_data = pd.merge(dust_data, aod_data, on=['time', 'city', 'source'])
+    # Replace -9999 with NaN for AOD
+    merged_data['aod'] = merged_data['aod'].replace(-9999, np.nan)
+    #print(merged_data.head())
+    #print(merged_data.columns)
+
+    # Replicate figure one
+    subset = merged_data[merged_data['city'].isin(['Ahwaz', 'Bushehr', 'Bandar Abbas'])]
+    subset = subset[(subset['time'] >= '2000-03-01') & (subset['time'] <= '2015-12-31')]
+    gen_dust_aod_time_series(subset, f_id="")
     
+    subset = merged_data[merged_data['city'].isin(['Ahwaz', 'Bushehr', 'Bandar Abbas'])]
+    subset = subset[(subset['time'] >= '2015-12-31')]
+    gen_dust_aod_time_series(subset, f_id="_extension")
+
+    # Monthly averages from 2000-2015
+    subset = merged_data[(merged_data['time'] >= '2000-01-01') & (merged_data['time'] <= '2015-12-31')]
+    gen_monthly_aod_means(subset, f_id="")
+
+    subset = merged_data[(merged_data['time'] >= '2015-12-31')]
+    gen_monthly_aod_means(subset, f_id="_extension")
+
+    # Select the 3 cities (table)
+    # monthly_avg = monthly_avg[monthly_avg['city'].isin(['Ahwaz', 'Bushehr', 'Bandar Abbas'])]
+
+    # Seasonal AOD averages
+    subset = merged_data[(merged_data['time'] >= '2000-01-01') & (merged_data['time'] <= '2015-12-31')]
+    gen_seasonal_aod_means(subset, f_id="")
+
+    subset = merged_data[(merged_data['time'] >= '2015-12-31')]
+    gen_seasonal_aod_means(subset, f_id="_extension")
+
+    # Make anomaly plots
+    subset = merged_data[(merged_data['time'] >= '2001-01-01') & (merged_data['time'] <= '2015-12-31')]
+    gen_anomaly_plots(subset, f_id="")
+    
+    subset = merged_data[(merged_data['time'] >= '2015-12-31')]
+    gen_anomaly_plots(subset, f_id="_extension")
+
 if __name__ == "__main__":
     main()
